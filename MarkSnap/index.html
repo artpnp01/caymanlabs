@@ -1,0 +1,636 @@
+<!-- 1. 引入库与设置视口 -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+    /* === 全局变量 === */
+    #artblocky-editor-root {
+        --bg-color: #18181b;
+        --panel-color: #27272a;
+        --accent-color: #07c160;
+        --text-primary: #f4f4f5;
+        --text-secondary: #a1a1aa;
+        --crop-line-color: #ef4444;
+        
+        width: 100%;
+        height: 100%; 
+        display: flex; 
+        flex-direction: column;
+        background-color: var(--bg-color); 
+        font-family: 'Inter', sans-serif;
+        color: var(--text-primary); 
+        overflow: hidden; 
+        user-select: none;
+        touch-action: none;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    /* === Header & Tools === */
+    #artblocky-editor-root header {
+        height: 54px; background-color: var(--panel-color); border-bottom: 1px solid #3f3f46; 
+        display: flex; align-items: center; justify-content: space-between; padding: 0 10px; gap: 8px; z-index: 50; flex-shrink: 0;
+    }
+    #artblocky-editor-root .brand { font-weight: 600; display: flex; align-items: center; font-size: 16px; flex-shrink: 0; }
+    #artblocky-editor-root .brand a { color: var(--text-primary); text-decoration: none; }
+    #artblocky-editor-root .brand span { display: block; }
+    
+    #artblocky-editor-root .tools-container { 
+        display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;
+        overflow-x: auto; overflow-y: hidden; white-space: nowrap; -webkit-overflow-scrolling: touch; 
+        padding-right: 10px; scrollbar-width: none; -ms-overflow-style: none;
+    }
+    #artblocky-editor-root .tools-container::-webkit-scrollbar { display: none; }
+    #artblocky-editor-root .toolbar-group { display: flex; gap: 2px; align-items: center; background: #333; padding: 3px; border-radius: 6px; flex-shrink: 0; }
+    #artblocky-editor-root .sep { width:1px; height:18px; background:#444; margin:0 2px; flex-shrink: 0;}
+    #artblocky-editor-root .action-group { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+    /* Select & Buttons */
+    #artblocky-editor-root .format-select { background: #333; color: var(--text-secondary); border: 1px solid transparent; border-radius: 4px; height: 32px; padding: 0 4px; font-size: 12px; outline: none; cursor: pointer; }
+    #artblocky-editor-root button { background: transparent; border: none; color: var(--text-secondary); width: 36px; height: 36px; border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    #artblocky-editor-root button:hover { background: #444; color: white; }
+    #artblocky-editor-root button.active { background: #444; color: var(--accent-color); }
+    #artblocky-editor-root button.primary { width: auto; padding: 0 12px; background: var(--accent-color); color: white; font-weight: 500; border-radius: 6px; font-size: 14px; height: 32px;}
+    #artblocky-editor-root button.secondary-action { width: auto; padding: 0 8px; background: #3f3f46; color: white; height: 32px;}
+    #artblocky-editor-root button i { font-size: 20px; }
+
+    /* Options Bar */
+    #artblocky-editor-root #options-bar { height: 48px; background-color: #202023; border-bottom: 1px solid #3f3f46; display: none; align-items: center; padding: 0 15px; gap: 15px; flex-shrink: 0; overflow-x: auto; white-space: nowrap; }
+    #artblocky-editor-root .color-dot { width: 22px; height: 22px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; flex-shrink: 0;}
+    #artblocky-editor-root .color-dot.active { border-color: white; transform: scale(1.1); }
+
+    /* Workspace */
+    #artblocky-editor-root #workspace { 
+        flex: 1; position: relative; display: flex; justify-content: center; align-items: center; 
+        background-image: radial-gradient(#333 1px, transparent 1px); background-size: 20px 20px; 
+        overflow: hidden; width: 100%; outline: none;
+    }
+
+    /* Crop Layer */
+    #artblocky-editor-root #crop-layer { 
+        position: absolute; inset: 0; z-index: 100; 
+        display: none; 
+        background-color: rgba(0, 0, 0, 0.5); 
+        pointer-events: auto;
+    }
+
+    #artblocky-editor-root #crop-img-container {
+        position: absolute; 
+        display: block;
+    }
+
+    #artblocky-editor-root .crop-controls {
+        position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+        background-color: #27272a; border: 1px solid #3f3f46; border-radius: 20px;
+        padding: 8px 20px; display: flex; gap: 15px; z-index: 200;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    }
+
+    .cropper-view-box { outline: 1px solid var(--crop-line-color); outline-color: var(--crop-line-color); }
+    .cropper-line { background-color: var(--crop-line-color); }
+    .cropper-dashed { border-color: var(--crop-line-color); }
+    .cropper-point { background-color: var(--crop-line-color); opacity: 1; }
+    .cropper-center:before, .cropper-center:after { background-color: var(--crop-line-color); }
+    .cropper-modal { opacity: 0.8; background-color: #000; } 
+
+    /* Context Menu & Toast */
+    #artblocky-editor-root #context-menu { position: absolute; display: none; flex-direction: column; background: #2d2d30; border: 1px solid #444; box-shadow: 0 4px 12px rgba(0,0,0,0.5); border-radius: 6px; padding: 4px; z-index: 1000; min-width: 140px; }
+    #artblocky-editor-root .ctx-item { padding: 10px 12px; font-size: 14px; cursor: pointer; color: #eee; border-radius: 4px;}
+    #artblocky-editor-root .ctx-item:hover { background: #3f3f46; }
+    #artblocky-editor-root #toast { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(7, 193, 96, 0.9); color: white; padding: 15px 30px; border-radius: 12px; opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 9999; text-align: center; font-weight: 500;}
+    #artblocky-editor-root #brush-cursor { position: fixed; pointer-events: none; border-radius: 50%; transform: translate(-50%, -50%); z-index: 9000; display: none; box-shadow: 0 0 0 1px rgba(255,255,255,0.5); }
+
+    @media (max-width: 600px) {
+        #artblocky-editor-root .brand span { display: none; }
+        #artblocky-editor-root .brand:after { content: "AB"; font-weight:900; color: var(--accent-color); margin-right: 5px;}
+        #artblocky-editor-root .sep { display: none; }
+        #artblocky-editor-root button.primary span { display: none; }
+        #artblocky-editor-root button.primary { padding: 0; width: 36px; height: 32px;}
+        #artblocky-editor-root button.primary i { font-size: 20px; margin: 0; }
+        #artblocky-editor-root header { padding: 0 8px; gap: 5px; }
+        #artblocky-editor-root .action-group { gap: 6px; }
+    }
+</style>
+
+<div id="artblocky-editor-root">
+    <div id="brush-cursor"></div>
+
+    <header>
+        <div class="brand">
+            <a href="https://caymanlab.vercel.app/" target="_blank"><span>MarkSnap</span></a>
+        </div>
+
+        <div class="tools-container">
+            <div class="toolbar-group">
+                <button onclick="document.getElementById('fileIn').click()" title="Open"><i class="material-icons">folder_open</i></button>
+                <button onclick="resetCanvas()" title="Reset Canvas"><i class="material-icons">restart_alt</i></button>
+            </div>
+            <div class="sep"></div>
+            <div class="toolbar-group">
+                <button id="btn-hand" onclick="setMode('hand')" title="Hand (H)"><i class="material-icons">pan_tool</i></button>
+                <button id="btn-draw" onclick="setMode('draw')" title="Draw"><i class="material-icons">edit</i></button>
+                <button id="btn-crop" onclick="startCrop()" title="Crop"><i class="material-icons">crop</i></button>
+                <button id="btn-rect" onclick="setMode('rect')" title="Rect"><i class="material-icons">check_box_outline_blank</i></button>
+                <button id="btn-circle" onclick="setMode('circle')" title="Circle"><i class="material-icons">radio_button_unchecked</i></button>
+                <button id="btn-arrow" onclick="setMode('arrow')" title="Arrow"><i class="material-icons">arrow_right_alt</i></button>
+                <button id="btn-text" onclick="setMode('text')" title="Text"><i class="material-icons">title</i></button>
+                <button id="btn-blur" onclick="setMode('blur')" title="Blur"><i class="material-icons">blur_on</i></button>
+                <button id="btn-emoji" onclick="setMode('emoji')" title="Emoji"><i class="material-icons">sentiment_satisfied</i></button>
+            </div>
+            <div class="sep"></div>
+            <div class="toolbar-group">
+                <button onclick="undo()" title="Undo"><i class="material-icons">undo</i></button>
+                <button onclick="redo()" title="Redo"><i class="material-icons">redo</i></button>
+            </div>
+        </div>
+
+        <div class="action-group">
+            <select class="format-select" id="fmt-select" onchange="setFormat(this.value)" title="Output Format">
+                <option value="png" selected>PNG</option>
+                <option value="jpeg">JPG</option>
+                <option value="webp">WEBP</option>
+            </select>
+            <button class="secondary-action" onclick="downloadImage()" title="Save"><i class="material-icons">download</i></button>
+            <button class="primary" onclick="copyToClipboard()" title="Copy"><i class="material-icons">content_copy</i><span>Copy</span></button>
+        </div>
+    </header>
+
+    <div id="options-bar">
+        <div id="style-controls" style="display:flex; align-items:center; gap:12px;">
+            <span style="font-size:11px; color:#71717a; font-weight:600">COLOR</span>
+            <div class="color-dot active" style="background:#ef4444" onclick="setColor('#ef4444', this)"></div>
+            <div class="color-dot" style="background:#f59e0b" onclick="setColor('#f59e0b', this)"></div>
+            <div class="color-dot" style="background:#10b981" onclick="setColor('#10b981', this)"></div>
+            <div class="color-dot" style="background:#3b82f6" onclick="setColor('#3b82f6', this)"></div>
+            <div class="color-dot" style="background:#ffffff" onclick="setColor('#ffffff', this)"></div>
+            <div class="color-dot" style="background:#000000" onclick="setColor('#000000', this)"></div>
+            <div style="width:1px; height:16px; background:#444; margin:0 5px;"></div>
+            <span style="font-size:11px; color:#71717a; font-weight:600">SIZE</span>
+            <input type="range" min="2" max="20" value="3" style="width:80px" oninput="setSize(this.value)">
+        </div>
+        <div id="emoji-bar" style="display:none; gap:5px; overflow-x:auto; padding:5px 0; flex:1;"></div>
+    </div>
+
+    <div id="workspace">
+        <canvas id="c"></canvas>
+        <div id="crop-layer">
+            <div id="crop-img-container">
+                <img id="crop-img" style="width:100%; height:100%; display:block;">
+            </div>
+            <div class="crop-controls">
+                <button style="color:white; width:auto;" onclick="cancelCrop()">Cancel</button>
+                <div style="width:1px; height:16px; background:#555;"></div>
+                <button class="primary" onclick="confirmCrop()" style="height:28px;">Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="context-menu">
+        <div class="ctx-item" onclick="deleteActive()">Delete Object</div>
+        <div class="ctx-item" onclick="copyToClipboard()">Copy All</div>
+    </div>
+
+    <div id="toast">
+        <i class="material-icons" style="font-size: 40px; color: white; display:block; margin-bottom:5px;">check_circle</i>
+        <div>Copied!</div>
+    </div>
+    <input type="file" id="fileIn" accept="image/*" hidden>
+</div>
+
+<script>
+    (function() {
+        const checkFabricLoaded = setInterval(() => {
+            if (typeof fabric !== 'undefined') {
+                clearInterval(checkFabricLoaded);
+                initEditor();
+            }
+        }, 100);
+
+        function initEditor() {
+            const wrapper = document.getElementById('workspace');
+            if (!wrapper || wrapper.clientHeight === 0) { setTimeout(initEditor, 200); return; }
+
+            const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+            const canvas = new fabric.Canvas('c', {
+                width: wrapper.clientWidth, height: wrapper.clientHeight,
+                selection: true, stopContextMenu: true, fireRightClick: true,
+                preserveObjectStacking: true,
+                allowTouchScrolling: false 
+            });
+
+            const cursorDiv = document.getElementById('brush-cursor');
+
+            let mode = 'none';
+            let color = '#ef4444';
+            let size = 3;
+            let cropper = null;
+            let history = [];
+            let historyStep = -1;
+            let isHistoryLocked = false;
+            let exportFormat = 'png'; 
+            let twoFingerStartDist = 0;
+            let twoFingerStartZoom = 1;
+            let isTwoFingerMode = false;
+
+            // Drag Drop
+             wrapper.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); });
+            wrapper.addEventListener('drop', (e) => {
+                e.preventDefault(); e.stopPropagation();
+                if(e.dataTransfer.files && e.dataTransfer.files[0] && e.dataTransfer.files[0].type.startsWith('image')) {
+                    loadImg(e.dataTransfer.files[0]);
+                }
+            });
+
+            // Touch Logic
+            const canvasEl = canvas.upperCanvasEl;
+            canvasEl.addEventListener('touchstart', function(e) {
+                if (e.touches.length === 2) {
+                    isTwoFingerMode = true;
+                    twoFingerStartDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+                    twoFingerStartZoom = canvas.getZoom();
+                    canvas.selection = false;
+                    e.preventDefault();
+                }
+            }, { passive: false });
+
+            canvasEl.addEventListener('touchmove', function(e) {
+                if (isTwoFingerMode && e.touches.length === 2) {
+                    const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+                    let zoom = twoFingerStartZoom * (dist / twoFingerStartDist);
+                    if (zoom > 5) zoom = 5; if (zoom < 0.1) zoom = 0.1;
+                    
+                    const center = {
+                        x: (e.touches[0].clientX + e.touches[1].clientX) / 2 - canvasEl.getBoundingClientRect().left,
+                        y: (e.touches[0].clientY + e.touches[1].clientY) / 2 - canvasEl.getBoundingClientRect().top
+                    };
+                    canvas.zoomToPoint(center, zoom);
+                    e.preventDefault(); e.stopPropagation();
+                }
+            }, { passive: false });
+
+            canvasEl.addEventListener('touchend', function(e) {
+                if (isTwoFingerMode) { isTwoFingerMode = false; canvas.selection = true; }
+            });
+
+            // === 历史记录管理 (核心修复点) ===
+            function saveHistory() {
+                if(isHistoryLocked) return;
+                if (historyStep < history.length - 1) history = history.slice(0, historyStep + 1);
+                // FIX: 保存历史时明确包含自定义属性，解决 Crop 找不到背景的问题
+                history.push(JSON.stringify(canvas.toJSON(['isBackground', 'excludeFromHistory', 'id'])));
+                historyStep++;
+                if(history.length > 50) { history.shift(); historyStep--; }
+            }
+
+            // 辅助函数：Undo/Redo 后重新应用当前模式的限制 (修复 Level 1 问题)
+            function reapplyModeState() {
+                if (mode === 'hand' || mode === 'none') {
+                    canvas.selection = true;
+                    canvas.defaultCursor = (mode === 'hand') ? 'grab' : 'default';
+                } else if (['rect', 'circle', 'arrow', 'text'].includes(mode)) {
+                    canvas.selection = false; // 禁止框选
+                    canvas.defaultCursor = (mode === 'text') ? 'text' : 'crosshair';
+                    canvas.discardActiveObject(); // 丢弃可能被选中的对象
+                    
+                    // 确保背景图不响应事件
+                    const bg = canvas.getObjects().find(obj => obj.isBackground);
+                    if(bg) bg.evented = false;
+                } else if (mode === 'draw' || mode === 'blur') {
+                    canvas.isDrawingMode = true;
+                }
+                canvas.requestRenderAll();
+            }
+
+            canvas.on('object:added', (e) => { if(!e.target.excludeFromHistory) saveHistory() });
+            canvas.on('object:modified', saveHistory);
+            canvas.on('object:removed', saveHistory);
+            canvas.on('path:created', (e) => { if(!e.path.excludeFromHistory) saveHistory() });
+
+            window.undo = function() {
+                if (historyStep > 0) {
+                    isHistoryLocked = true; historyStep--;
+                    canvas.loadFromJSON(history[historyStep], () => { 
+                        canvas.renderAll(); 
+                        isHistoryLocked = false;
+                        reapplyModeState(); // FIX: 恢复状态
+                    });
+                }
+            };
+            window.redo = function() {
+                if (historyStep < history.length - 1) {
+                    isHistoryLocked = true; historyStep++;
+                    canvas.loadFromJSON(history[historyStep], () => { 
+                        canvas.renderAll(); 
+                        isHistoryLocked = false; 
+                        reapplyModeState(); // FIX: 恢复状态
+                    });
+                }
+            };
+
+            // === 鼠标交互 ===
+            let isMouseDown = false;
+            let activeShape = null;
+            let origX, origY;
+            let isDragging = false; let lastPosX = 0; let lastPosY = 0;
+
+            canvas.on('mouse:down', (o) => {
+                if(isTwoFingerMode) return;
+                if(o.button === 3) { 
+                    if(o.target) {
+                        canvas.setActiveObject(o.target);
+                        canvas.requestRenderAll();
+                        const menu = document.getElementById('context-menu');
+                        menu.style.display = 'flex';
+                        menu.style.left = o.e.clientX + 'px';
+                        menu.style.top = o.e.clientY + 'px';
+                    }
+                    return; 
+                }
+                document.getElementById('context-menu').style.display = 'none';
+
+                // 如果是 Hand 模式或 None 且没有点击到对象
+                if ((mode === 'none' || mode === 'hand') && !o.target) {
+                    isDragging = true; canvas.selection = false; 
+                    const evt = o.e.touches ? o.e.touches[0] : o.e;
+                    lastPosX = evt.clientX; lastPosY = evt.clientY;
+                    canvas.defaultCursor = 'grabbing';
+                    return;
+                }
+
+                // 图形绘制模式下的点击逻辑
+                if (['rect', 'circle', 'arrow', 'text', 'draw'].includes(mode)) {
+                    // 强制取消选中任何对象（防止回撤后误选）
+                    canvas.discardActiveObject(); 
+                    
+                    // FIX: 再次确保背景不可操作
+                    const bg = canvas.getObjects().find(obj => obj.isBackground);
+                    if(bg) { bg.evented = false; bg.selectable = false; }
+                    
+                    canvas.requestRenderAll();
+                }
+
+                const pointer = canvas.getPointer(o.e);
+                isMouseDown = true; origX = pointer.x; origY = pointer.y;
+
+                if (mode === 'text') { addText(pointer); return; }
+
+                if (['rect', 'circle', 'arrow'].includes(mode)) {
+                    canvas.selection = false; 
+
+                    if (mode === 'rect') activeShape = new fabric.Rect({ left: origX, top: origY, width: 0, height: 0, stroke: color, strokeWidth: size, fill: 'transparent', transparentCorners: false });
+                    else if (mode === 'circle') activeShape = new fabric.Ellipse({ left: origX, top: origY, rx: 0, ry: 0, stroke: color, strokeWidth: size, fill: 'transparent' });
+                    else if (mode === 'arrow') activeShape = new fabric.Line([origX, origY, origX, origY], { stroke: color, strokeWidth: size, selectable: true, evented: false });
+                    canvas.add(activeShape);
+                }
+            });
+
+            canvas.on('mouse:move', (o) => {
+                if (isTwoFingerMode) return;
+                if (!isTouchDevice && (mode === 'draw' || mode === 'blur')) {
+                    const pointer = canvas.getPointer(o.e);
+                    let visualSize = size * canvas.getZoom();
+                    let visualColor = color;
+                    if (mode === 'blur') { visualSize = 30 * canvas.getZoom(); visualColor = 'rgba(220, 220, 220, 0.7)'; }
+                    cursorDiv.style.width = visualSize + 'px'; cursorDiv.style.height = visualSize + 'px';
+                    cursorDiv.style.backgroundColor = visualColor;
+                    cursorDiv.style.left = o.e.clientX + 'px'; cursorDiv.style.top = o.e.clientY + 'px';
+                    cursorDiv.style.display = 'block';
+                } else { cursorDiv.style.display = 'none'; }
+
+                if (isDragging) {
+                    const evt = o.e.touches ? o.e.touches[0] : o.e;
+                    const vpt = canvas.viewportTransform;
+                    vpt[4] += evt.clientX - lastPosX; vpt[5] += evt.clientY - lastPosY;
+                    canvas.requestRenderAll();
+                    lastPosX = evt.clientX; lastPosY = evt.clientY;
+                    return;
+                }
+
+                if (!isMouseDown || !activeShape) return;
+                const pointer = canvas.getPointer(o.e);
+
+                if (mode === 'rect') {
+                    if(origX > pointer.x) activeShape.set({ left: Math.abs(pointer.x) });
+                    if(origY > pointer.y) activeShape.set({ top: Math.abs(pointer.y) });
+                    activeShape.set({ width: Math.abs(origX - pointer.x), height: Math.abs(origY - pointer.y) });
+                } else if (mode === 'circle') {
+                    if(origX > pointer.x) activeShape.set({ left: Math.abs(pointer.x) });
+                    if(origY > pointer.y) activeShape.set({ top: Math.abs(pointer.y) });
+                    activeShape.set({ rx: Math.abs(origX - pointer.x) / 2, ry: Math.abs(origY - pointer.y) / 2 });
+                } else if (mode === 'arrow') {
+                    activeShape.set({ x2: pointer.x, y2: pointer.y });
+                }
+                canvas.renderAll();
+            });
+
+            canvas.on('mouse:out', () => { cursorDiv.style.display = 'none'; });
+            canvas.on('mouse:up', () => {
+                if(isTwoFingerMode) return;
+                if (isDragging) { 
+                    isDragging = false; canvas.selection = true; canvas.defaultCursor = (mode === 'hand') ? 'grab' : 'default'; return; 
+                }
+                isMouseDown = false;
+                if (mode === 'arrow' && activeShape) {
+                    const line = activeShape; const headLength = size * 4;
+                    const x1 = line.x1, y1 = line.y1, x2 = line.x2, y2 = line.y2;
+                    const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+                    canvas.remove(line);
+                    const arrowLine = new fabric.Line([0, 0, Math.sqrt(Math.pow(x2-x1,2) + Math.pow(y2-y1,2)) - headLength, 0], { stroke: color, strokeWidth: size, originX: 'left', originY: 'center' });
+                    const arrowHead = new fabric.Triangle({ width: headLength, height: headLength, fill: color, left: arrowLine.width, top: 0, angle: 90, originX: 'center', originY: 'center' });
+                    const group = new fabric.Group([arrowLine, arrowHead], { left: x1, top: y1, angle: angle, originX: 'left', originY: 'center' });
+                    canvas.add(group); canvas.setActiveObject(group);
+                    setMode('none'); saveHistory();
+                } else if (activeShape) { 
+                    activeShape.setCoords(); canvas.setActiveObject(activeShape);
+                    if (mode === 'rect' || mode === 'circle') setMode('none');
+                    saveHistory(); 
+                }
+                activeShape = null;
+                if(mode !== 'draw' && mode !== 'blur' && mode !== 'rect' && mode !== 'circle' && mode !== 'arrow') canvas.selection = true;
+            });
+
+            // === 模式切换 ===
+            window.setMode = function(newMode) {
+                if (mode === newMode && newMode !== 'none' && newMode !== 'hand') { setMode('none'); return; }
+                mode = newMode;
+                canvas.isDrawingMode = false; canvas.defaultCursor = 'default'; canvas.freeDrawingCursor = 'default'; activeShape = null;
+                document.querySelectorAll('.toolbar-group button').forEach(b => b.classList.remove('active'));
+                if (mode === 'hand' || mode === 'none') { document.getElementById('options-bar').style.display = 'none'; } 
+                else { document.getElementById('options-bar').style.display = 'flex'; document.getElementById('style-controls').style.display = 'flex'; document.getElementById('emoji-bar').style.display = 'none'; }
+                if(newMode !== 'none') { const btn = document.getElementById('btn-' + newMode); if(btn) btn.classList.add('active'); }
+                
+                if (mode === 'hand') { canvas.defaultCursor = 'grab'; canvas.selection = true; canvas.discardActiveObject(); canvas.renderAll(); }
+                else if (mode === 'draw' || mode === 'blur') {
+                    canvas.isDrawingMode = true;
+                    if(!isTouchDevice) { canvas.freeDrawingCursor = 'none'; canvas.defaultCursor = 'none'; }
+                    canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
+                    if (mode === 'draw') { canvas.freeDrawingBrush.color = color; canvas.freeDrawingBrush.width = parseInt(size); } 
+                    else { canvas.freeDrawingBrush.color = 'rgba(220, 220, 220, 0.7)'; canvas.freeDrawingBrush.width = 30; document.getElementById('style-controls').style.display = 'none'; }
+                }
+                else if (mode === 'emoji') { document.getElementById('style-controls').style.display = 'none'; document.getElementById('emoji-bar').style.display = 'flex'; } 
+                else if (['rect','circle','arrow'].includes(mode)) { canvas.defaultCursor = 'crosshair'; canvas.discardActiveObject(); canvas.requestRenderAll(); }
+                else if (mode === 'text') { canvas.defaultCursor = 'text'; canvas.discardActiveObject(); canvas.requestRenderAll(); }
+            };
+            
+            // === 键盘事件 (添加了 Ctrl+Z) ===
+            window.addEventListener('keydown', (e) => {
+                const cropLayer = document.getElementById('crop-layer');
+                const isCropVisible = cropLayer.style.display === 'block'; 
+                if (isCropVisible) {
+                    if (e.key === 'Enter') { e.preventDefault(); confirmCrop(); }
+                    if (e.key === 'Escape') { e.preventDefault(); cancelCrop(); }
+                    return;
+                }
+                
+                // FIX: 快捷键支持
+                if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+                    e.preventDefault();
+                    if (e.shiftKey) redo();
+                    else undo();
+                    return;
+                }
+
+                const activeObj = canvas.getActiveObject();
+                const isEditingText = activeObj && (activeObj.type === 'i-text' || activeObj.type === 'text') && activeObj.isEditing;
+                if ((e.key === 'Delete' || e.key === 'Backspace') && !isEditingText) { deleteActive(); }
+                if ((e.key === 'h' || e.key === 'H') && !isEditingText && !e.ctrlKey && !e.metaKey) { setMode('hand'); }
+                if (e.key === 'Escape') { if(mode !== 'none' && mode !== 'hand') { setMode('hand'); } }
+            });
+
+            window.resetCanvas = function() { saveHistory(); canvas.clear(); canvas.setBackgroundColor(null, canvas.renderAll.bind(canvas)); canvas.viewportTransform = [1, 0, 0, 1, 0, 0]; saveHistory(); showToast("Reset (Undoable)"); };
+            function addText(coords) { const text = new fabric.IText('Tap to Edit', { left: coords.x, top: coords.y, fill: color, fontSize: 24, fontFamily: 'Inter' }); canvas.add(text); canvas.setActiveObject(text); text.enterEditing(); text.selectAll(); setMode('none'); }
+            window.setColor = function(c, el) { color = c; document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active')); el.classList.add('active'); if(mode !== 'blur' && canvas.freeDrawingBrush) { canvas.freeDrawingBrush.color = c; } const active = canvas.getActiveObject(); if(active) { if(active.type === 'i-text') active.set('fill', c); else if(active.type === 'rect' || active.type === 'ellipse') active.set('stroke', c); else if(active.type === 'group') { active.getObjects().forEach(o => { if(o.type==='triangle') o.set('fill', c); else o.set('stroke', c); }); } canvas.requestRenderAll(); saveHistory(); } };
+            window.setSize = function(val) { size = parseInt(val); if(mode !== 'blur' && canvas.freeDrawingBrush) { canvas.freeDrawingBrush.width = size; } };
+            window.setFormat = function(val) { exportFormat = val; }
+            const emojis = ['😀','😂','🥰','😎','🤔','👍','👌','❤️','🔥','🎉','👀','✅','❌','❓','⚠️','💩','💡','💯','🚩'];
+            const emojiBar = document.getElementById('emoji-bar');
+            emojis.forEach(e => { const btn = document.createElement('button'); btn.className = 'emoji-btn'; btn.innerText = e; btn.style.fontSize = "24px"; btn.style.width="40px"; btn.onclick = () => { const t = new fabric.Text(e, { left: canvas.width/2, top: canvas.height/2, fontSize: 60, originX:'center', originY:'center' }); canvas.add(t); canvas.setActiveObject(t); setMode('none'); }; emojiBar.appendChild(btn); });
+            document.addEventListener('paste', (e) => { const item = Array.from(e.clipboardData.items).find(x => x.type.startsWith('image')); if(item) loadImg(item.getAsFile()); });
+            const fileInput = document.getElementById('fileIn');
+            fileInput.onchange = (e) => { if(e.target.files[0]) loadImg(e.target.files[0]); e.target.value = ''; };
+
+            function loadImg(blob) {
+                const reader = new FileReader();
+                reader.onload = (f) => {
+                    fabric.Image.fromURL(f.target.result, (img) => {
+                        if(canvas.getObjects().length > 0) saveHistory();
+                        history = []; historyStep = -1;
+                        canvas.clear(); canvas.viewportTransform = [1, 0, 0, 1, 0, 0];
+                        const scale = Math.min((wrapper.clientWidth - 20) / img.width, (wrapper.clientHeight - 30) / img.height);
+                        // FIX: isBackground 属性必须被保存到历史中
+                        img.set({ left: canvas.width/2, top: canvas.height/2, originX:'center', originY:'center', scaleX: scale, scaleY: scale, selectable:false, evented:false, excludeFromHistory: true, isBackground: true });
+                        canvas.add(img); canvas.sendToBack(img);
+                        saveHistory(); 
+                    });
+                };
+                reader.readAsDataURL(blob);
+            }
+
+            function getCanvasContent(forceFormat) {
+                const fmt = forceFormat || exportFormat || 'png';
+                const bg = canvas.getObjects().find(o => o.isBackground);
+                const opts = { format: fmt, multiplier: 2 };
+                if (!bg) return canvas.toDataURL(opts);
+                const originalVpt = canvas.viewportTransform;
+                canvas.viewportTransform = [1, 0, 0, 1, 0, 0]; 
+                const left = bg.left - (bg.width * bg.scaleX) / 2;
+                const top = bg.top - (bg.height * bg.scaleY) / 2;
+                const width = bg.width * bg.scaleX;
+                const height = bg.height * bg.scaleY;
+                const multiplier = 1 / bg.scaleX;
+                const dataURL = canvas.toDataURL({ ...opts, left: left, top: top, width: width, height: height, multiplier: multiplier });
+                canvas.setViewportTransform(originalVpt); 
+                return dataURL;
+            }
+
+            window.copyToClipboard = function() {
+                const dataURL = getCanvasContent('png'); 
+                fetch(dataURL).then(res => res.blob()).then(blob => {
+                    try { navigator.clipboard.write([new ClipboardItem({"image/png": blob})]); showToast("Copied to Clipboard!"); } 
+                    catch (err) { showToast("Use Download on Mobile"); }
+                });
+            };
+            window.downloadImage = function() {
+                const link = document.createElement('a');
+                const ext = exportFormat === 'jpeg' ? 'jpg' : exportFormat;
+                link.download = `edited-image.${ext}`;
+                link.href = getCanvasContent(); link.click();
+            };
+            function showToast(msg) { const t = document.getElementById('toast'); t.querySelector('div').innerText = msg; t.style.opacity = 1; setTimeout(() => t.style.opacity = 0, 2000); }
+            window.deleteActive = function() { const active = canvas.getActiveObjects(); if(active.length) { canvas.discardActiveObject(); active.forEach(o => canvas.remove(o)); saveHistory(); } document.getElementById('context-menu').style.display = 'none'; };
+
+            window.startCrop = function() {
+                setMode('none');
+                
+                const bg = canvas.getObjects().find(o => o.isBackground);
+                // 如果找不到背景（例如历史回撤丢失了属性），此功能将无法启动
+                if (!bg) {
+                    console.warn("Background image not found. Is history preserving 'isBackground'?");
+                    return;
+                }
+
+                const rect = bg.getBoundingRect(); 
+
+                const cropLayer = document.getElementById('crop-layer');
+                cropLayer.style.display = 'block';
+                document.querySelector('.canvas-container').style.visibility = 'hidden';
+
+                const container = document.getElementById('crop-img-container');
+                container.style.width = rect.width + 'px';
+                container.style.height = rect.height + 'px';
+                container.style.left = rect.left + 'px';
+                container.style.top = rect.top + 'px';
+
+                const dataURL = getCanvasContent('png');
+                const img = document.getElementById('crop-img');
+                img.src = dataURL;
+
+                if(cropper) cropper.destroy();
+                
+                cropper = new Cropper(img, {
+                    viewMode: 3, 
+                    dragMode: 'crop', 
+                    autoCropArea: 1, 
+                    movable: false, 
+                    zoomable: false, 
+                    scalable: false,
+                    background: false,
+                    guides: true,
+                    highlight: false,
+                    cropBoxMovable: true,
+                    cropBoxResizable: true,
+                    ready: function() {
+                        this.cropper.containerData.width = rect.width;
+                        this.cropper.containerData.height = rect.height;
+                    }
+                });
+            };
+            
+            window.confirmCrop = function() {
+                if(!cropper) return;
+                const src = cropper.getCroppedCanvas().toDataURL();
+                cancelCrop();
+                fabric.Image.fromURL(src, (img) => {
+                    canvas.clear(); canvas.viewportTransform = [1, 0, 0, 1, 0, 0];
+                    const scale = Math.min((wrapper.clientWidth-20)/img.width, (wrapper.clientHeight-30)/img.height);
+                    img.set({ left:canvas.width/2, top:canvas.height/2, originX:'center', originY:'center', scaleX:scale, scaleY:scale, selectable:false, evented:false, excludeFromHistory:true, isBackground: true });
+                    canvas.add(img); canvas.sendToBack(img);
+                    saveHistory();
+                });
+            };
+            window.cancelCrop = function() {
+                if(cropper) cropper.destroy();
+                document.getElementById('crop-layer').style.display = 'none';
+                document.querySelector('.canvas-container').style.visibility = 'visible';
+            };
+
+            window.addEventListener('resize', () => { canvas.setWidth(wrapper.clientWidth); canvas.setHeight(wrapper.clientHeight); canvas.renderAll(); });
+            canvas.on('mouse:wheel', (opt) => { let zoom = canvas.getZoom() * (0.999 ** opt.e.deltaY); if (zoom > 5) zoom = 5; if (zoom < 0.1) zoom = 0.1; canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom); opt.e.preventDefault(); opt.e.stopPropagation(); });
+            window.addEventListener('click', () => document.getElementById('context-menu').style.display = 'none');
+        }
+    })();
+</script>

@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Jump To Ride</title>
+    <link href="https://fonts.googleapis.com/css2?family=Black+Ops+One&family=VT323&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <style>
+        :root {
+            --bg: #000000;
+            --slow: #ff003c;
+            --mid: #ffcc00;
+            --fast: #00ff66;
+            --text: #ffffff;
+        }
+
+        body { 
+            margin: 0; padding: 0; background-color: var(--bg) !important;
+            overflow: hidden; font-family: 'Black Ops One', cursive; user-select: none;
+        }
+
+        .input_video { display: none; } 
+        
+        #output_canvas { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            object-fit: cover; 
+            opacity: 0.6; 
+            pointer-events: none; 
+            z-index: 0; 
+        }
+
+        #game-container {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10;
+        }
+
+        .speed-label { font-family: 'VT323'; font-size: 1.5rem; color: #888; margin-bottom: -10px; }
+        #speed-val { font-size: 11rem; line-height: 1; color: var(--text); text-shadow: 0 5px 20px rgba(0,0,0,0.8); }
+        .unit { font-size: 3rem; color: #666; }
+
+        #coach-msg {
+            font-size: 3.5rem; text-transform: uppercase; margin: 20px 0 40px 0; padding: 10px 40px;
+            background: var(--slow); color: white; transform: skew(-10deg); 
+            box-shadow: 10px 10px 0px rgba(255,255,255,0.1); animation: pulse 0.8s infinite;
+        }
+        @keyframes pulse { 0% { transform: skew(-10deg) scale(1); } 50% { transform: skew(-10deg) scale(1.05); } 100% { transform: skew(-10deg) scale(1); } }
+
+        .track-wrapper { width: 85%; max-width: 800px; position: relative; }
+        #cyclist-sprite { position: absolute; top: -55px; left: 0%; font-size: 50px; transform: scaleX(-1); filter: drop-shadow(2px 2px 0px #000); transition: left 0.1s linear; z-index: 20; }
+        .progress-track { width: 100%; height: 35px; background: #222; border: 3px solid #fff; position: relative; overflow: hidden; border-radius: 4px; }
+        .progress-fill { height: 100%; width: 0%; background: repeating-linear-gradient(45deg, var(--fast), var(--fast) 10px, #00cc52 10px, #00cc52 20px); box-shadow: 0 0 15px var(--fast); transition: width 0.1s linear; }
+        .dist-info { margin-top: 10px; display: flex; justify-content: space-between; font-family: 'VT323'; font-size: 1.5rem; color: #888; }
+        #dist-val { color: var(--text); font-size: 2rem; }
+
+        /* --- 启动页 (布局大改：按钮居中且最大化) --- */
+        #setup-layer { 
+            position: absolute; top:0; left:0; width:100%; height:100%; 
+            background: #000; z-index: 100; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center; 
+            text-align: center;
+            padding: 20px; box-sizing: border-box; /* 防止贴边 */
+        }
+        
+        .intro-logo { 
+            width: 180px; max-width: 40%; height: auto; 
+            margin-bottom: 40px; /* 拉开和按钮的距离 */
+            border-radius: 10px; 
+            opacity: 0.8;
+        }
+
+        /* 核心修改：按钮变身为主标题 */
+        #connect-btn { 
+            font-family: 'Black Ops One', cursive; /* 使用更有力量感的字体 */
+            font-size: 3.5rem; /* 巨大化 */
+            line-height: 1.1;
+            background: var(--fast); 
+            color: #000; 
+            border: 6px solid #fff; 
+            padding: 20px 40px; 
+            cursor: pointer; 
+            box-shadow: 0 0 40px var(--fast); 
+            border-radius: 8px;
+            animation: btnPulse 1.5s infinite ease-in-out; /* 心跳动画 */
+            white-space: nowrap; /* 不换行 */
+        }
+
+        /* 按钮的心跳动画 */
+        @keyframes btnPulse {
+            0% { transform: scale(1); box-shadow: 0 0 30px var(--fast); }
+            50% { transform: scale(1.05); box-shadow: 0 0 60px var(--fast), 0 0 20px #fff; }
+            100% { transform: scale(1); box-shadow: 0 0 30px var(--fast); }
+        }
+
+        /* 玩法说明放在按钮下方 */
+        .instruction-box {
+            margin-top: 50px;
+            padding: 0 20px;
+            opacity: 0.8;
+        }
+        .inst-sub {
+            font-family: 'VT323'; font-size: 1.4rem; 
+            color: #ccc; 
+            line-height: 1.5;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        
+        /* --- 胜利页 (保持 Fixed Top 布局) --- */
+        #victory-layer {
+            display: none; 
+            position: fixed; top:0; left:0; width:100%; height:100%;
+            background: rgba(0,0,0,0.95); 
+            z-index: 200;
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: flex-start;
+            overflow-y: auto; 
+            padding-top: 90px;
+            padding-bottom: 40px;
+            box-sizing: border-box;
+        }
+
+        .action-area { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 70px;
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(5px);
+            display: flex; justify-content: center; align-items: center; gap: 20px; 
+            z-index: 300; border-bottom: 1px solid #333;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        }
+
+        .v-btn { padding: 8px 25px; font-size: 1.2rem; cursor: pointer; font-family: 'VT323'; border: 2px solid #fff; white-space: nowrap; }
+
+        #social-poster {
+            background: #000; width: 320px; padding: 0; display: flex; flex-direction: column; align-items: center; position: relative; box-shadow: 0 20px 50px rgba(0,0,0,0.8); margin-bottom: 20px;
+        }
+        .poster-header { width: 100%; text-align: center; padding-top: 30px; }
+        .poster-title { color: var(--fast); font-size: 2.5rem; margin: 0; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px var(--fast); }
+        .poster-hero-img { width: 100%; height: auto; display: block; margin: 10px 0; mix-blend-mode: lighten; }
+        .poster-stats { width: 100%; text-align: center; padding-bottom: 30px; }
+        .stat-group { margin-bottom: 20px; }
+        .stat-label { font-family: 'VT323'; font-size: 1.5rem; color: #666; letter-spacing: 2px; text-transform: uppercase; }
+        .stat-value { font-size: 4.5rem; color: #fff; line-height: 0.9; margin: 5px 0; }
+        .stat-value.highlight { color: var(--mid); }
+        .poster-footer { font-family: 'VT323'; font-size: 1rem; color: #444; margin-bottom: 20px; }
+
+        @media (max-width: 600px) {
+            #speed-val { font-size: 8rem; }
+            #coach-msg { font-size: 2.5rem; padding: 8px 20px; }
+            /* 手机上自动适配按钮大小 */
+            #connect-btn { font-size: 2.5rem; padding: 15px 30px; }
+            .inst-sub { font-size: 1.2rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 1. 启动页 (更新：按钮即标题) -->
+    <div id="setup-layer">
+        <img src="https://d6d0e563fc9e9b1f1a3cb3d5cac82c06.cdn.bubble.io/f1764149833745x608831675945717500/edited-image%20%281%29.jpg?_gl=1*1r0kxk9*_gcl_au*MTI0OTAxNTg3LjE3NjExODM3MDA.*_ga*NzczNzE2NTQ3LjE3NjExODM3MDA.*_ga_BFPVR2DEE2*czE3NjQxMTYyOTEkbzIyJGcxJHQxNzY0MTQ5NzY1JGo2MCRsMCRoMA.." class="intro-logo">
+        
+        <!-- 按钮放在中间，作为主标题 -->
+        <button id="connect-btn" onclick="initCamera()">JUMP TO RIDE</button>
+        
+        <!-- 说明文字放在按钮下方 -->
+        <div class="instruction-box">
+            <div class="inst-sub">
+                Camera tracks your moves.<br>
+                Faster Jumps = Higher Speed.<br>
+                Kill the boredom & Unleash speed!
+            </div>
+        </div>
+
+        <div id="loading-txt" style="color:#666; margin-top:20px; font-family:'VT323'; display:none;">LOADING AI...</div>
+    </div>
+
+    <!-- 2. 游戏界面 -->
+    <div id="game-container">
+        <video class="input_video" playsinline></video>
+        <canvas id="output_canvas"></canvas>
+
+        <div class="speed-label">CURRENT SPEED</div>
+        <div id="speed-val">0<span class="unit">KM/H</span></div>
+        <div id="coach-msg">READY?</div>
+
+        <div class="track-wrapper">
+            <div id="cyclist-sprite">🚴</div>
+            <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+            <div class="dist-info">
+                <span>START</span>
+                <span>REMAINING: <span id="dist-val">100</span> KM</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. 胜利页 (Fixed Buttons) -->
+    <div id="victory-layer">
+        <div class="action-area">
+            <button class="v-btn" onclick="location.reload()" style="background:transparent; color:#fff;">AGAIN</button>
+            <button class="v-btn" onclick="downloadScore()" style="background:var(--fast); color:#000; border:none;">SAVE CARD</button>
+        </div>
+
+        <div id="social-poster">
+            <div class="poster-header"><h2 class="poster-title">MISSION<br>COMPLETED</h2></div>
+            <img src="https://d6d0e563fc9e9b1f1a3cb3d5cac82c06.cdn.bubble.io/f1764149833745x608831675945717500/edited-image%20%281%29.jpg?_gl=1*1r0kxk9*_gcl_au*MTI0OTAxNTg3LjE3NjExODM3MDA.*_ga*NzczNzE2NTQ3LjE3NjExODM3MDA.*_ga_BFPVR2DEE2*czE3NjQxMTYyOTEkbzIyJGcxJHQxNzY0MTQ5NzY1JGo2MCRsMCRoMA.." class="poster-hero-img">
+            <div class="poster-stats">
+                <div class="stat-group"><div class="stat-label">AVG SPEED</div><div class="stat-value highlight" id="end-spd">0 KM/H</div></div>
+                <div class="stat-group"><div class="stat-label">TOTAL TIME</div><div class="stat-value" id="end-time">00:00</div></div>
+            </div>
+            <div class="poster-footer">POWERED BY JUMP TO RIDE AI</div>
+        </div>
+    </div>
+
+    <script>
+        const TARGET_DIST = 100;
+        const DIST_FACTOR = 0.0035; 
+        
+        let state = { 
+            dist: 0, speed: 0, lastY: 0, active: false, startTime: 0,
+            speedSum: 0, speedCount: 0
+        };
+
+        const ui = {
+            setup: document.getElementById('setup-layer'),
+            btn: document.getElementById('connect-btn'),
+            loadTxt: document.getElementById('loading-txt'),
+            speed: document.getElementById('speed-val'),
+            coach: document.getElementById('coach-msg'),
+            bar: document.getElementById('progress-fill'),
+            sprite: document.getElementById('cyclist-sprite'),
+            dist: document.getElementById('dist-val'),
+            victory: document.getElementById('victory-layer'),
+            video: document.querySelector('.input_video'),
+            canvas: document.getElementById('output_canvas'),
+            ctx: document.getElementById('output_canvas').getContext('2d')
+        };
+
+        async function initCamera() {
+            ui.btn.style.display = 'none';
+            ui.loadTxt.style.display = 'block';
+            try {
+                const pose = new Pose({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`});
+                pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+                pose.onResults(onPoseResults);
+                const camera = new Camera(ui.video, {
+                    onFrame: async () => await pose.send({image: ui.video}),
+                    width: 640, height: 480
+                });
+                await camera.start();
+                ui.setup.style.display = 'none';
+                state.active = true;
+                state.startTime = Date.now();
+                gameLoop();
+            } catch (e) {
+                alert("Please allow camera access.");
+                ui.btn.style.display = 'block';
+            }
+        }
+
+        function onPoseResults(results) {
+            ui.canvas.width = window.innerWidth;
+            ui.canvas.height = window.innerHeight;
+            ui.ctx.clearRect(0, 0, ui.canvas.width, ui.canvas.height);
+            
+            if(results.poseLandmarks) {
+                drawConnectors(ui.ctx, results.poseLandmarks, POSE_CONNECTIONS, 
+                              {color: '#00FF00', lineWidth: 6});
+                drawLandmarks(ui.ctx, results.poseLandmarks, 
+                              {color: '#FF0055', lineWidth: 2, radius: 6});
+                
+                if(state.active) {
+                    const currY = (results.poseLandmarks[11].y + results.poseLandmarks[12].y) / 2;
+                    if(state.lastY - currY > 0.015) state.speed += 2.0; 
+                    state.lastY = currY;
+                }
+            }
+        }
+
+        function gameLoop() {
+            if(!state.active) return;
+            state.speed *= 0.96;
+            if(state.speed < 0.1) state.speed = 0;
+            if(state.speed > 80) state.speed = 80;
+            
+            state.dist += state.speed * DIST_FACTOR;
+            
+            const displaySpeed = Math.floor(state.speed * 1.5);
+            
+            if (state.dist > 0.1) {
+                state.speedSum += displaySpeed;
+                state.speedCount++;
+            }
+
+            ui.speed.innerHTML = `${displaySpeed}<span class="unit">KM/H</span>`;
+            
+            let p = (state.dist / TARGET_DIST) * 100;
+            if(p > 100) p = 100;
+            ui.bar.style.width = p + "%";
+            ui.sprite.style.left = `calc(${p}% - 40px)`; 
+            ui.dist.innerText = Math.max(0, Math.floor(TARGET_DIST - state.dist));
+
+            updateCoach(displaySpeed);
+
+            if(state.dist >= TARGET_DIST) {
+                finishGame();
+            } else {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function updateCoach(spd) {
+            let msg = "", bg = "", col = "";
+            if (spd < 5) { msg = "MOVE IT!"; bg = "var(--slow)"; col = "#fff"; }
+            else if (spd < 20) { msg = "FASTER!"; bg = "#333"; col = "#fff"; }
+            else if (spd < 40) { msg = "KEEP PUSHING"; bg = "var(--mid)"; col = "#000"; }
+            else { msg = "UNSTOPPABLE!"; bg = "var(--fast)"; col = "#000"; }
+            ui.coach.innerText = msg;
+            ui.coach.style.background = bg;
+            ui.coach.style.color = col;
+        }
+
+        function finishGame() {
+            state.active = false;
+            const sec = (Date.now() - state.startTime) / 1000;
+            const m = Math.floor(sec / 60);
+            const s = Math.floor(sec % 60);
+            const realAvgSpeed = state.speedCount > 0 ? Math.floor(state.speedSum / state.speedCount) : 0;
+
+            document.getElementById('end-time').innerText = `${m}:${s.toString().padStart(2,'0')}`;
+            document.getElementById('end-spd').innerText = realAvgSpeed + " KM/H";
+            
+            ui.victory.style.display = 'flex';
+        }
+
+        function downloadScore() {
+            const poster = document.getElementById('social-poster');
+            html2canvas(poster, {
+                backgroundColor: "#000000",
+                scale: 2 
+            }).then(c => {
+                const l = document.createElement('a');
+                l.download = 'mission_card.png';
+                l.href = c.toDataURL();
+                l.click();
+            });
+        }
+    </script>
+</body>
+</html>
