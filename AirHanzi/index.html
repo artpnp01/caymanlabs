@@ -108,14 +108,14 @@
 
         let gamePhase = 'init'; 
         let phaseTimer = 0; 
-        let reactStartTime = 0; // 用于给最后3秒记录时间
+        let reactStartTime = 0;
         
         let internalTimer = null;
         let bufferTimeout = null;
         let reactTimeout = null;
         
         let isBuffering = false; let isAborting = false;
-        let mediaRecorder; let recordedChunks =[]; let finalVideoFile = null;
+        let mediaRecorder; let recordedChunks = []; let finalVideoFile = null;
         const video = document.getElementById('input_video');
 
         document.addEventListener("visibilitychange", () => {
@@ -143,7 +143,6 @@
 
         function setupMediaRecorder() {
             const canvasStream = dCanvas.captureStream(30); 
-            // 【安全修复】避免部分用户没有麦克风权限导致整体录制崩溃退出
             const audioTracks = video.srcObject ? video.srcObject.getAudioTracks() : [];
             const tracks = [...canvasStream.getTracks()];
             if (audioTracks.length > 0) tracks.push(audioTracks[0]);
@@ -185,7 +184,6 @@
         }
 
         function finishDrawingEarly() { 
-            // 避免多次点击疯狂触发
             if (gamePhase === 'react' || gamePhase === 'done') return;
 
             clearInterval(internalTimer); 
@@ -194,7 +192,6 @@
             gamePhase = 'react'; 
             reactStartTime = Date.now();
             
-            // 【核心修复2】等待 3 秒钟，倒计时已挂载至画面渲染
             reactTimeout = setTimeout(() => {
                 gamePhase = 'done';
                 if(mediaRecorder && mediaRecorder.state !== 'inactive') {
@@ -224,10 +221,12 @@
             targetWord = list[Math.floor(Math.random() * list.length)];
             initHanziWriter();
             
+            // 重置 pinch 状态机，避免 retry 后残留状态
+            resetPinchState();
+
             setTimeout(() => {
-                recordedChunks =[];
+                recordedChunks = [];
                 setupMediaRecorder(); 
-                // 【录像修复】强制 200ms 分片刷新缓冲区，杜绝停止时掉帧情况！
                 mediaRecorder.start(200); 
                 startMemorizePhase();
             }, 100);
@@ -248,7 +247,41 @@
             } else { const a = document.createElement('a'); a.href = URL.createObjectURL(finalVideoFile); a.download = finalVideoFile.name; a.click(); }
         }
 
-        let isAppStarted = false; let wasPinching = false; let smoothX = 0, smoothY = 0; const LERP_FACTOR = 0.5; 
+        // ─────────────────────────────────────────────
+        //   PINCH 状态机（优化版）
+        // ─────────────────────────────────────────────
+        let isAppStarted = false;
+        let wasPinching = false;
+        let smoothX = 0, smoothY = 0;
+        const LERP_FACTOR = 0.5;
+
+        // Pinch ratio 自身的 EMA 平滑系数
+        // 值越小越稳定（延迟略高），值越大越跟手（容易抖动）
+        const PINCH_SMOOTH = 0.35;
+        let smoothPinchRatio = 1.0;
+
+        // 帧确认计数器：连续 N 帧同向才切换状态，避免单帧噪声误触发
+        const CONFIRM_ON  = 2;   // 触发 pinch 需要的连续帧数
+        const CONFIRM_OFF = 3;   // 释放 pinch 需要的连续帧数（释放更保守，笔画不易断）
+        let pinchOnCount  = 0;
+        let pinchOffCount = 0;
+
+        // Pinch 触发 / 释放阈值（基于 腕部→中指根部 距离归一化）
+        // 太灵敏 → 调小 THRESH_ON；太难触发 → 调大 THRESH_ON
+        const THRESH_ON  = 0.28;  // ratio 低于此值：认为在捏合
+        const THRESH_OFF = 0.42;  // ratio 高于此值：认为已松开
+
+        function resetPinchState() {
+            wasPinching    = false;
+            smoothPinchRatio = 1.0;
+            pinchOnCount   = 0;
+            pinchOffCount  = 0;
+            smoothX        = 0;
+            smoothY        = 0;
+        }
+
+        // ─────────────────────────────────────────────
+
         const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
         hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
         hands.onResults(onResults);
@@ -259,7 +292,6 @@
             if(!isAppStarted) { 
                 isAppStarted = true; 
                 setupMediaRecorder(); 
-                // 【录像修复】强制 200ms 分片刷新缓冲区
                 mediaRecorder.start(200); 
                 startMemorizePhase(); 
             }
@@ -271,6 +303,8 @@
             dCtx.scale(-1, 1); dCtx.translate(-cW, 0); dCtx.drawImage(results.image, sX, sY, sW, sH, 0, 0, cW, cH); dCtx.restore();
 
             dCtx.save();
+            dCtx.textAlign = 'center';
+
             if (gamePhase === 'memorize') {
                 if (hwCanvas) dCtx.drawImage(hwCanvas, cW/2 - 200, cH/2 - 250, 400, 400);
                 
@@ -294,8 +328,6 @@
                 dCtx.fillStyle = '#fff'; dCtx.font = '900 140px "SimHei"'; 
                 dCtx.fillText(targetWord.char, 60, 300);
 
-                // 【录像修复】增加显眼的倒计时动画挂载在画面中！
-                // 这不仅让用户知道"此时还在录像"，也强制浏览器视频流渲染保持活跃，不被干掉
                 let timeLeft = Math.max(0, 3 - (Date.now() - reactStartTime) / 1000).toFixed(1);
                 dCtx.fillStyle = 'rgba(255, 51, 102, 0.9)';
                 dCtx.fillRect(0, cH - 80, cW, 80);
@@ -306,48 +338,103 @@
 
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 const hand = results.multiHandLandmarks[0];
-                const indexTip = hand[8]; const thumbTip = hand[4]; const indexBase = hand[5]; const pinkyBase = hand[17];
-                
-                const rawX = cW - (((indexTip.x * vW - sX) / sW) * cW); const rawY = ((indexTip.y * vH - sY) / sH) * cH;
-                
-                if (smoothX === 0) { smoothX = rawX; smoothY = rawY; }
-                smoothX = smoothX + (rawX - smoothX) * LERP_FACTOR; smoothY = smoothY + (rawY - smoothY) * LERP_FACTOR;
 
-                // 【核心修复1】加入长宽比例(cW, cH)进行乘积计算
-                // 直接计算手机实际像素跨度，消除画面长宽压缩带来的伪接触错觉
+                // 关键点
+                const indexTip = hand[8];
+                const thumbTip = hand[4];
+                const wrist    = hand[0];   // 腕部
+                const midMCP   = hand[9];   // 中指根部（比掌宽更稳定的参考距离）
+
+                // ── 指尖坐标映射（带镜像修正）──
+                const rawX = cW - (((indexTip.x * vW - sX) / sW) * cW);
+                const rawY = ((indexTip.y * vH - sY) / sH) * cH;
+                if (smoothX === 0) { smoothX = rawX; smoothY = rawY; }
+                smoothX += (rawX - smoothX) * LERP_FACTOR;
+                smoothY += (rawY - smoothY) * LERP_FACTOR;
+
+                // ── Pinch 距离（拇指尖 → 食指尖，考虑画布长宽比）──
                 const pDistX = (indexTip.x - thumbTip.x) * cW;
                 const pDistY = (indexTip.y - thumbTip.y) * cH;
                 const pinchDist = Math.hypot(pDistX, pDistY);
 
-                const pBaseX = (indexBase.x - pinkyBase.x) * cW;
-                const pBaseY = (indexBase.y - pinkyBase.y) * cH;
-                const palmWidth = Math.hypot(pBaseX, pBaseY);
+                // ── 归一化参考：腕部 → 中指根部（任何角度都稳定）──
+                const refX = (wrist.x - midMCP.x) * cW;
+                const refY = (wrist.y - midMCP.y) * cH;
+                const refDist = Math.hypot(refX, refY);
 
-                const pinchRatio = palmWidth > 0 ? pinchDist / palmWidth : 1;
-                
+                const pinchRatioRaw = refDist > 0 ? pinchDist / refDist : 1;
+
+                // ── EMA 平滑 ratio，消除逐帧抖动 ──
+                smoothPinchRatio += (pinchRatioRaw - smoothPinchRatio) * PINCH_SMOOTH;
+
+                // ── 帧确认状态机 ──
                 let isPinching = wasPinching;
-                // 放宽触发值，收缩断开值，保证既能丝滑触发，分开后也能瞬间断开
-                if (!wasPinching && pinchRatio < 0.25) { isPinching = true; } 
-                else if (wasPinching && pinchRatio > 0.40) { isPinching = false; } 
+                if (!wasPinching) {
+                    // 未捏合状态：连续 CONFIRM_ON 帧低于阈值才触发
+                    if (smoothPinchRatio < THRESH_ON) {
+                        pinchOnCount++;
+                        pinchOffCount = 0;
+                    } else {
+                        pinchOnCount = 0;
+                    }
+                    if (pinchOnCount >= CONFIRM_ON) {
+                        isPinching   = true;
+                        pinchOnCount = 0;
+                    }
+                } else {
+                    // 已捏合状态：连续 CONFIRM_OFF 帧高于阈值才释放
+                    if (smoothPinchRatio > THRESH_OFF) {
+                        pinchOffCount++;
+                        pinchOnCount = 0;
+                    } else {
+                        pinchOffCount = 0;
+                    }
+                    if (pinchOffCount >= CONFIRM_OFF) {
+                        isPinching    = false;
+                        pinchOffCount = 0;
+                    }
+                }
 
+                // ── 绘制逻辑 ──
                 if (gamePhase === 'draw') {
                     const pinchStatusDom = document.getElementById('pinch-status');
                     if (isPinching) {
                         pinchStatusDom.innerText = "✍️ DRAWING...";
                         pinchStatusDom.className = "absolute top-16 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-5 py-2 rounded-full font-black text-lg z-50 shadow-lg";
-                        if (!wasPinching) { drawCtx.beginPath(); drawCtx.moveTo(smoothX, smoothY); } else { drawCtx.lineTo(smoothX, smoothY); drawCtx.stroke(); } 
+                        if (!wasPinching) {
+                            // 刚刚触发：开始新笔画
+                            drawCtx.beginPath();
+                            drawCtx.moveTo(smoothX, smoothY);
+                        } else {
+                            // 持续捏合：连线
+                            drawCtx.lineTo(smoothX, smoothY);
+                            drawCtx.stroke();
+                        }
                     } else {
                         pinchStatusDom.innerText = "🤏 PINCH TO DRAW";
                         pinchStatusDom.className = "absolute top-16 left-1/2 transform -translate-x-1/2 bg-black/60 text-white px-5 py-2 rounded-full font-black text-lg z-50 backdrop-blur-sm";
                     }
                 }
+
                 wasPinching = isPinching;
-                
+
+                // ── 指尖光标 ──
                 if (gamePhase === 'draw' || gamePhase === 'memorize') {
-                    dCtx.beginPath(); dCtx.arc(smoothX, smoothY, 12, 0, 2*Math.PI);
-                    dCtx.fillStyle = isPinching ? '#FF3366' : '#FFEA00'; dCtx.fill(); dCtx.lineWidth = 4; dCtx.strokeStyle = '#000'; dCtx.stroke();
+                    dCtx.beginPath();
+                    dCtx.arc(smoothX, smoothY, 12, 0, 2 * Math.PI);
+                    dCtx.fillStyle  = isPinching ? '#FF3366' : '#FFEA00';
+                    dCtx.fill();
+                    dCtx.lineWidth  = 4;
+                    dCtx.strokeStyle = '#000';
+                    dCtx.stroke();
                 }
-            } else { wasPinching = false; }
+            } else {
+                // 手消失：重置 pinch 状态，防止下次出现时状态残留
+                wasPinching   = false;
+                pinchOnCount  = 0;
+                pinchOffCount = 0;
+            }
+
             dCtx.drawImage(drawLayer, 0, 0); 
         }
     </script>
