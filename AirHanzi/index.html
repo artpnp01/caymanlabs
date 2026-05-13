@@ -262,7 +262,7 @@
 
         // 帧确认计数器：连续 N 帧同向才切换状态，避免单帧噪声误触发
         const CONFIRM_ON  = 2;   // 触发 pinch 需要的连续帧数
-        const CONFIRM_OFF = 3;   // 释放 pinch 需要的连续帧数（释放更保守，笔画不易断）
+        const CONFIRM_OFF = 1;   // 释放 pinch 需要的连续帧数（释放更保守，笔画不易断）
         let pinchOnCount  = 0;
         let pinchOffCount = 0;
 
