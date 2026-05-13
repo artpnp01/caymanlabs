@@ -108,8 +108,8 @@
 
         let gamePhase = 'init'; 
         let phaseTimer = 0; 
+        let reactStartTime = 0; // 用于给最后3秒记录时间
         
-        // 【核心修复1】分离并管理所有的 timeout 和 interval
         let internalTimer = null;
         let bufferTimeout = null;
         let reactTimeout = null;
@@ -142,9 +142,17 @@
         }
 
         function setupMediaRecorder() {
-            const canvasStream = dCanvas.captureStream(30); const audioTrack = video.srcObject.getAudioTracks()[0];
-            const combinedStream = new MediaStream([...canvasStream.getTracks(), audioTrack]);
-            let mimeType = 'video/mp4'; if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
+            const canvasStream = dCanvas.captureStream(30); 
+            // 【安全修复】避免部分用户没有麦克风权限导致整体录制崩溃退出
+            const audioTracks = video.srcObject ? video.srcObject.getAudioTracks() : [];
+            const tracks = [...canvasStream.getTracks()];
+            if (audioTracks.length > 0) tracks.push(audioTracks[0]);
+            
+            const combinedStream = new MediaStream(tracks);
+            let mimeType = 'video/mp4'; 
+            if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm;codecs=vp8,opus';
+            if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
+            
             mediaRecorder = new MediaRecorder(combinedStream, { mimeType: mimeType });
             
             mediaRecorder.ondataavailable = e => { if (e.data.size > 0 && !isAborting) recordedChunks.push(e.data); };
@@ -177,49 +185,50 @@
         }
 
         function finishDrawingEarly() { 
+            // 避免多次点击疯狂触发
+            if (gamePhase === 'react' || gamePhase === 'done') return;
+
             clearInterval(internalTimer); 
             document.getElementById('action-bar').classList.add('hidden'); 
             document.getElementById('pinch-status').classList.add('hidden'); 
             gamePhase = 'react'; 
+            reactStartTime = Date.now();
             
-            // 【核心修复2】等待 3 秒钟，让用户充分展现惊恐和崩溃的表情
+            // 【核心修复2】等待 3 秒钟，倒计时已挂载至画面渲染
             reactTimeout = setTimeout(() => {
                 gamePhase = 'done';
-                if(mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+                if(mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                }
                 if (wakeLock !== null) wakeLock.release().then(() => wakeLock = null);
             }, 3000);
         }
 
-        // 【核心修复1】彻底斩断所有上一个流程的状态，防止乱跳
         function retryCurrentLevel() {
-            // 1. 清理所有定时器
             clearInterval(internalTimer);
             clearTimeout(bufferTimeout);
             clearTimeout(reactTimeout);
             
-            // 2. 隐藏 UI
             document.getElementById('action-bar').classList.add('hidden');
             document.getElementById('pinch-status').classList.add('hidden');
 
-            // 3. 强制销毁当前录像机，并置空它的回调，防止触发 showResults
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                 mediaRecorder.onstop = null; 
                 mediaRecorder.stop();
             }
             
-            // 4. 清空画布
             drawCtx.clearRect(0, 0, CANVAS_W, CANVAS_H);
             document.getElementById('hw-container').innerHTML = '';
             
-            // 5. 重新抽字并开始
             const list = hanziDict[currentDifficulty];
             targetWord = list[Math.floor(Math.random() * list.length)];
             initHanziWriter();
             
             setTimeout(() => {
                 recordedChunks =[];
-                setupMediaRecorder(); // 重新绑定干净的回调函数
-                mediaRecorder.start();
+                setupMediaRecorder(); 
+                // 【录像修复】强制 200ms 分片刷新缓冲区，杜绝停止时掉帧情况！
+                mediaRecorder.start(200); 
                 startMemorizePhase();
             }, 100);
         }
@@ -250,7 +259,8 @@
             if(!isAppStarted) { 
                 isAppStarted = true; 
                 setupMediaRecorder(); 
-                mediaRecorder.start(); 
+                // 【录像修复】强制 200ms 分片刷新缓冲区
+                mediaRecorder.start(200); 
                 startMemorizePhase(); 
             }
             
@@ -283,6 +293,14 @@
                 dCtx.fillText('EXPECTATION:', 40, 140);
                 dCtx.fillStyle = '#fff'; dCtx.font = '900 140px "SimHei"'; 
                 dCtx.fillText(targetWord.char, 60, 300);
+
+                // 【录像修复】增加显眼的倒计时动画挂载在画面中！
+                // 这不仅让用户知道"此时还在录像"，也强制浏览器视频流渲染保持活跃，不被干掉
+                let timeLeft = Math.max(0, 3 - (Date.now() - reactStartTime) / 1000).toFixed(1);
+                dCtx.fillStyle = 'rgba(255, 51, 102, 0.9)';
+                dCtx.fillRect(0, cH - 80, cW, 80);
+                dCtx.fillStyle = '#fff'; dCtx.font = '900 35px Arial'; dCtx.textAlign = 'center';
+                dCtx.fillText(`🔴 RECORDING REACTION... ${timeLeft}s`, cW/2, cH - 30);
             }
             dCtx.restore();
 
@@ -295,14 +313,22 @@
                 if (smoothX === 0) { smoothX = rawX; smoothY = rawY; }
                 smoothX = smoothX + (rawX - smoothX) * LERP_FACTOR; smoothY = smoothY + (rawY - smoothY) * LERP_FACTOR;
 
-                const palmWidth = Math.hypot(indexBase.x - pinkyBase.x, indexBase.y - pinkyBase.y);
-                const pinchDist = Math.hypot(indexTip.x - thumbTip.x, indexTip.y - thumbTip.y);
+                // 【核心修复1】加入长宽比例(cW, cH)进行乘积计算
+                // 直接计算手机实际像素跨度，消除画面长宽压缩带来的伪接触错觉
+                const pDistX = (indexTip.x - thumbTip.x) * cW;
+                const pDistY = (indexTip.y - thumbTip.y) * cH;
+                const pinchDist = Math.hypot(pDistX, pDistY);
+
+                const pBaseX = (indexBase.x - pinkyBase.x) * cW;
+                const pBaseY = (indexBase.y - pinkyBase.y) * cH;
+                const palmWidth = Math.hypot(pBaseX, pBaseY);
+
                 const pinchRatio = palmWidth > 0 ? pinchDist / palmWidth : 1;
                 
                 let isPinching = wasPinching;
-                // 【核心修复3】极其严苛的触发条件：手指必须很近(<0.18)才算画，只要稍微分开一点(>0.28)就断掉
-                if (!wasPinching && pinchRatio < 0.18) { isPinching = true; } 
-                else if (wasPinching && pinchRatio > 0.28) { isPinching = false; } 
+                // 放宽触发值，收缩断开值，保证既能丝滑触发，分开后也能瞬间断开
+                if (!wasPinching && pinchRatio < 0.25) { isPinching = true; } 
+                else if (wasPinching && pinchRatio > 0.40) { isPinching = false; } 
 
                 if (gamePhase === 'draw') {
                     const pinchStatusDom = document.getElementById('pinch-status');
