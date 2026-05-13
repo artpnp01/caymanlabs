@@ -269,7 +269,7 @@
         // Pinch 触发 / 释放阈值（基于 腕部→中指根部 距离归一化）
         // 太灵敏 → 调小 THRESH_ON；太难触发 → 调大 THRESH_ON
         const THRESH_ON  = 0.28;  // ratio 低于此值：认为在捏合
-        const THRESH_OFF = 0.42;  // ratio 高于此值：认为已松开
+        const THRESH_OFF = 0.36;  // ratio 高于此值：认为已松开
 
         function resetPinchState() {
             wasPinching    = false;
