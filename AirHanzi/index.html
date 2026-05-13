@@ -18,8 +18,6 @@
         .snap-btn.red { background: #FF3366; color: #fff; }
         .snap-btn.yellow { background: #FFEA00; color: #000; }
         .offscreen { position: absolute; top: -9999px; left: -9999px; opacity: 0; pointer-events: none; }
-        
-        /* 增加震动动画 */
         @keyframes shake { 0%, 100% {transform: translateX(0);} 25% {transform: translateX(-5px);} 75% {transform: translateX(5px);} }
         .shake-anim { animation: shake 0.5s ease-in-out infinite; }
     </style>
@@ -52,7 +50,7 @@
         </div>
         <div class="flex flex-col items-center w-full gap-4 pointer-events-auto">
             <div id="status-badge" class="bg-yellow-400 text-black px-6 py-2 rounded-full font-black uppercase text-lg shadow-lg">GET READY</div>
-            <button id="btn-done" onclick="finishDrawingEarly()" class="hidden snap-btn px-8 py-4 text-xl w-full max-w-[250px] border-4 border-black">✅ I'M DONE!</button>
+            <button id="btn-done" onclick="finishDrawingEarly()" class="hidden snap-btn px-8 py-4 text-xl w-full max-w-[250px] border-4 border-black">✅ I'M DONE</button>
             <button id="btn-stop-rec" onclick="stopRecordingFlow()" class="hidden snap-btn red px-8 py-4 text-xl w-full max-w-[250px] border-4 border-white animate-bounce">🛑 STOP REC</button>
         </div>
     </div>
@@ -62,18 +60,18 @@
         <video id="replay-video" class="absolute inset-0 w-full h-full object-cover z-0" controls loop playsinline></video>
         <div class="absolute top-0 w-full h-32 bg-gradient-to-b from-black/80 to-transparent z-10 pointer-events-none"></div>
         <div class="absolute bottom-0 w-full h-64 bg-gradient-to-t from-black/90 to-transparent z-10 pointer-events-none"></div>
-        <div class="z-20 w-full pt-12 px-4 flex justify-between items-center">
-            <h2 class="text-2xl font-black text-stroke text-white leading-none">YOUR VLOG</h2>
-            <button onclick="location.reload()" class="font-bold text-white bg-black/50 px-4 py-2 rounded-full text-sm">Play Again</button>
+        
+        <div class="z-20 w-full pt-12 px-4 flex justify-center items-center pointer-events-none">
+            <h2 class="text-3xl font-black text-stroke text-white leading-none">YOUR VLOG</h2>
         </div>
-        <div class="z-20 w-full pb-10 px-4 flex flex-col gap-3 max-w-md mx-auto">
-            <button id="btn-share" onclick="shareVideo()" class="snap-btn px-6 py-4 w-full flex flex-col items-center text-center"><span class="text-xl">🚀 SHARE VIDEO</span><span class="text-xs font-sans text-gray-600 mt-1">Post to TikTok, IG or Save</span></button>
-            <button onclick="location.reload()" class="snap-btn yellow px-6 py-3 w-full flex flex-col items-center border-2 border-black"><span class="text-md leading-tight">TRY EASY MODE TO RECOVER DIGNITY</span></button>
+        
+        <div class="z-20 w-full pb-10 px-4 flex flex-col gap-4 max-w-md mx-auto">
+            <button id="btn-share" onclick="shareVideo()" class="snap-btn px-6 py-4 w-full flex flex-col items-center text-center"><span class="text-2xl">🚀 SHARE VIDEO</span></button>
+            <button onclick="location.reload()" class="snap-btn yellow px-6 py-4 w-full flex flex-col items-center text-center border-2 border-black"><span class="text-xl">🔄 PLAY AGAIN</span></button>
         </div>
     </div>
 
     <script>
-        // --- 1. 三阶爆款词库 ---
         const hanziDict = {
             easy:[
                 {char: '一', hint: "Literally just a line. Don't mess it up."},
@@ -134,7 +132,17 @@
         drawCtx.strokeStyle = '#FF3366'; drawCtx.lineWidth = 18; drawCtx.lineCap = 'round'; drawCtx.lineJoin = 'round'; drawCtx.shadowColor = '#FF3366'; drawCtx.shadowBlur = 5;
 
         let hwWriter; let hwCanvas;
-        function initHanziWriter() { hwWriter = HanziWriter.create('hw-container', targetWord.char, { width: 400, height: 400, padding: 10, strokeColor: '#FFEA00', radicalColor: '#FF3366', delayBetweenStrokes: 100, renderer: 'canvas' }); hwCanvas = document.querySelector('#hw-container canvas'); }
+        function initHanziWriter() { 
+            // 将动画速度调慢，配合 5 秒倒数
+            hwWriter = HanziWriter.create('hw-container', targetWord.char, { 
+                width: 400, height: 400, padding: 10, 
+                strokeColor: '#FFEA00', radicalColor: '#FF3366', 
+                strokeAnimationSpeed: 0.4, // 减慢单笔画速度
+                delayBetweenStrokes: 150,  // 增加笔画间停顿
+                renderer: 'canvas' 
+            }); 
+            hwCanvas = document.querySelector('#hw-container canvas'); 
+        }
 
         const screens = { start: document.getElementById('screen-start'), hud: document.getElementById('screen-hud'), result: document.getElementById('screen-result') };
         function showScreen(name) { Object.values(screens).forEach(s => s.classList.remove('active')); screens[name].classList.add('active'); }
@@ -144,12 +152,10 @@
         let mediaRecorder; let recordedChunks =[]; let finalVideoFile = null;
         const video = document.getElementById('input_video');
 
-        // --- 2. 难度选择与启动逻辑 ---
         async function selectDifficulty(level) {
             document.getElementById('difficulty-buttons').style.display = 'none';
             document.getElementById('loading-text').style.display = 'block';
             
-            // 随机抽取该难度的词
             const list = hanziDict[level];
             targetWord = list[Math.floor(Math.random() * list.length)];
 
@@ -168,21 +174,32 @@
             mediaRecorder = new MediaRecorder(combinedStream, { mimeType: mimeType });
             mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
             mediaRecorder.onstop = showResults;
-            mediaRecorder.start(); gamePhase = 'animating';
+            mediaRecorder.start(); 
             
-            hwWriter.animateCharacter({
-                onComplete: function() {
-                    gamePhase = 'memorize'; phaseTimer = 5.0; 
-                    internalTimer = setInterval(() => {
-                        phaseTimer -= 0.1;
-                        if (gamePhase === 'memorize' && phaseTimer <= 0) { gamePhase = 'draw'; phaseTimer = 40.0; document.getElementById('btn-done').style.display = 'block'; } 
-                        else if (gamePhase === 'draw' && phaseTimer <= 0) { finishDrawingEarly(); }
-                    }, 100);
-                }
-            });
+            // 直接进入 5 秒倒数，同时开始缓慢画字
+            gamePhase = 'memorize'; 
+            phaseTimer = 5.0;
+            hwWriter.animateCharacter();
+
+            internalTimer = setInterval(() => {
+                phaseTimer -= 0.1;
+                if (gamePhase === 'memorize' && phaseTimer <= 0) { 
+                    gamePhase = 'draw'; 
+                    phaseTimer = 40.0; 
+                    document.getElementById('btn-done').style.display = 'block'; 
+                } 
+                else if (gamePhase === 'draw' && phaseTimer <= 0) { finishDrawingEarly(); }
+            }, 100);
         }
 
-        function finishDrawingEarly() { document.getElementById('btn-done').style.display = 'none'; clearInterval(internalTimer); gamePhase = 'react'; document.getElementById('btn-stop-rec').style.display = 'block'; }
+        function finishDrawingEarly() { 
+            document.getElementById('btn-done').style.display = 'none'; 
+            document.getElementById('status-badge').style.display = 'none'; // 彻底隐藏顶部黄色干扰栏
+            clearInterval(internalTimer); 
+            gamePhase = 'react'; 
+            document.getElementById('btn-stop-rec').style.display = 'block'; 
+        }
+        
         function stopRecordingFlow() { gamePhase = 'done'; mediaRecorder.stop(); if (wakeLock !== null) { wakeLock.release().then(() => wakeLock = null); } }
 
         function showResults() {
@@ -196,15 +213,14 @@
 
         async function shareVideo() {
             if (navigator.share && navigator.canShare && navigator.canShare({ files: [finalVideoFile] })) {
-                try { await navigator.share({ title: 'Air-Hanzi Masterpiece', text: 'Look at my terrible Chinese handwriting! 😂', files: [finalVideoFile] }); } catch (err) { console.log(err); }
+                try { await navigator.share({ title: 'Air-Hanzi Challenge', text: 'Check out my Chinese drawing skills!', files: [finalVideoFile] }); } catch (err) { console.log(err); }
             } else { const a = document.createElement('a'); a.href = URL.createObjectURL(finalVideoFile); a.download = finalVideoFile.name; a.click(); }
         }
 
-        // --- 3. 手势识别与防抖平滑处理 ---
         let isAppStarted = false;
         let wasPinching = false;
-        let smoothX = 0, smoothY = 0; // 平滑坐标
-        const LERP_FACTOR = 0.5; // 坐标平滑系数
+        let smoothX = 0, smoothY = 0; 
+        const LERP_FACTOR = 0.5; 
 
         const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
         hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
@@ -220,57 +236,55 @@
             if (cRatio > vRatio) { sH = sW / cRatio; sY = (vH - sH) / 2; } else { sW = sH * cRatio; sX = (vW - sW) / 2; }
             dCtx.scale(-1, 1); dCtx.translate(-cW, 0); dCtx.drawImage(results.image, sX, sY, sW, sH, 0, 0, cW, cH); dCtx.restore();
 
-            // 绘制UI状态
             dCtx.save();
-            if (gamePhase === 'animating') {
-                statusBadge.innerText = "👀 WATCH CAREFULLY";
-                if (hwCanvas) dCtx.drawImage(hwCanvas, cW/2 - 200, cH/2 - 250, 400, 400);
-                // 显示搞笑 Hint
-                dCtx.fillStyle = '#FFEA00'; dCtx.font = '900 35px Arial'; dCtx.textAlign = 'center'; dCtx.textBaseline = 'top'; 
-                dCtx.fillText(`"${targetWord.hint}"`, cW/2, cH/2 + 180);
-            } else if (gamePhase === 'memorize') {
+            if (gamePhase === 'memorize') {
                 statusBadge.innerText = "🔥 MEMORIZE IT!"; statusBadge.style.backgroundColor = '#FF3366'; statusBadge.style.color = '#fff';
+                
                 if (hwCanvas) dCtx.drawImage(hwCanvas, cW/2 - 200, cH/2 - 250, 400, 400);
-                dCtx.fillStyle = '#FF3366'; dCtx.font = '900 150px Arial'; dCtx.textAlign = 'center'; dCtx.lineWidth = 15; dCtx.strokeStyle = '#fff'; dCtx.strokeText(Math.ceil(phaseTimer), cW/2, cH/2 + 250); dCtx.fillText(Math.ceil(phaseTimer), cW/2, cH/2 + 250);
+                
+                // 大大的倒数数字
+                dCtx.fillStyle = '#FF3366'; dCtx.font = '900 150px Arial'; dCtx.textAlign = 'center'; dCtx.lineWidth = 15; dCtx.strokeStyle = '#fff'; 
+                dCtx.strokeText(Math.ceil(phaseTimer), cW/2, cH/2 + 250); dCtx.fillText(Math.ceil(phaseTimer), cW/2, cH/2 + 250);
+                
+                // 英文提示词
+                dCtx.fillStyle = '#FFEA00'; dCtx.font = '900 35px Arial'; dCtx.lineWidth = 6; dCtx.strokeStyle = '#000';
+                dCtx.strokeText(`"${targetWord.hint}"`, cW/2, cH/2 + 350); dCtx.fillText(`"${targetWord.hint}"`, cW/2, cH/2 + 350);
+
             } else if (gamePhase === 'draw') {
                 statusBadge.innerText = "🤏 PINCH TO DRAW!"; statusBadge.style.backgroundColor = '#FFEA00'; statusBadge.style.color = '#000';
                 dCtx.fillStyle = '#fff'; dCtx.font = '900 120px Arial'; dCtx.textAlign = 'center'; dCtx.lineWidth = 10; dCtx.strokeStyle = '#000'; dCtx.strokeText(phaseTimer.toFixed(1), cW/2, 200); dCtx.fillText(phaseTimer.toFixed(1), cW/2, 200);
+            
             } else if (gamePhase === 'react') {
-                statusBadge.innerText = "😂 YOUR MASTERPIECE..."; statusBadge.style.backgroundColor = '#fff'; statusBadge.style.color = '#000';
-                dCtx.fillStyle = 'rgba(0,0,0,0.7)'; dCtx.fillRect(30, cH - 450, 300, 350);
-                dCtx.fillStyle = '#FFEA00'; dCtx.font = '900 30px Arial'; dCtx.textAlign = 'left'; dCtx.fillText('EXPECTATION:', 50, cH - 400);
-                dCtx.fillStyle = '#fff'; dCtx.font = '900 200px "SimHei"'; dCtx.fillText(targetWord.char, 70, cH - 150);
-                dCtx.fillStyle = '#FF3366'; dCtx.font = '900 80px Arial'; dCtx.textAlign = 'center'; dCtx.lineWidth = 8; dCtx.strokeStyle = '#000'; dCtx.strokeText('FAIL', cW/2, cH/2 - 100); dCtx.fillText('FAIL', cW/2, cH/2 - 100);
+                // 极简对比模式：左上方紧凑排版，不干扰录制面部
+                dCtx.fillStyle = 'rgba(0,0,0,0.7)'; dCtx.fillRect(20, 100, 220, 260); // 黑底移到左上角
+                dCtx.fillStyle = '#FFEA00'; dCtx.font = '900 24px Arial'; dCtx.textAlign = 'left'; 
+                dCtx.fillText('EXPECTATION:', 40, 140);
+                dCtx.fillStyle = '#fff'; dCtx.font = '900 140px "SimHei"'; 
+                dCtx.fillText(targetWord.char, 60, 300);
             }
             dCtx.fillStyle = 'rgba(255,255,255,0.6)'; dCtx.font = '900 40px Arial'; dCtx.textAlign = 'right'; dCtx.fillText('AIR-HANZI CHALLENGE', cW - 30, 80);
             dCtx.restore();
 
-            // 捏合与绘制逻辑
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 const hand = results.multiHandLandmarks[0];
                 const indexTip = hand[8]; const thumbTip = hand[4]; const indexBase = hand[5]; const pinkyBase = hand[17];
                 
-                // 1. 获取原始坐标
                 const rawX = cW - (((indexTip.x * vW - sX) / sW) * cW); 
                 const rawY = ((indexTip.y * vH - sY) / sH) * cH;
                 
-                // 2. 坐标平滑处理 (Lerp)
                 if (smoothX === 0) { smoothX = rawX; smoothY = rawY; }
                 smoothX = smoothX + (rawX - smoothX) * LERP_FACTOR;
                 smoothY = smoothY + (rawY - smoothY) * LERP_FACTOR;
 
-                // 3. 捏合迟滞算法 (Hysteresis 双阈值防断触)
                 const palmWidth = Math.hypot(indexBase.x - pinkyBase.x, indexBase.y - pinkyBase.y);
                 const pinchDist = Math.hypot(indexTip.x - thumbTip.x, indexTip.y - thumbTip.y);
                 const pinchRatio = palmWidth > 0 ? pinchDist / palmWidth : 1;
                 
                 let isPinching = wasPinching;
-                if (!wasPinching && pinchRatio < 0.28) { isPinching = true; } // 捏紧阈值
-                else if (wasPinching && pinchRatio > 0.45) { isPinching = false; } // 松开阈值
+                if (!wasPinching && pinchRatio < 0.28) { isPinching = true; } 
+                else if (wasPinching && pinchRatio > 0.45) { isPinching = false; } 
 
-                // 4. 绘制轨迹
                 if (gamePhase === 'draw') {
-                    if(isPinching) { statusBadge.innerText = "✍️ DRAWING!"; statusBadge.style.backgroundColor = '#FF3366'; statusBadge.style.color = '#fff'; }
                     if (isPinching) { 
                         if (!wasPinching) { drawCtx.beginPath(); drawCtx.moveTo(smoothX, smoothY); } 
                         else { drawCtx.lineTo(smoothX, smoothY); drawCtx.stroke(); } 
@@ -278,9 +292,10 @@
                 }
                 wasPinching = isPinching;
                 
-                // 5. 绘制平滑后的光标
-                dCtx.beginPath(); dCtx.arc(smoothX, smoothY, 12, 0, 2*Math.PI);
-                dCtx.fillStyle = isPinching ? '#FF3366' : '#FFEA00'; dCtx.fill(); dCtx.lineWidth = 4; dCtx.strokeStyle = '#000'; dCtx.stroke();
+                if (gamePhase === 'draw' || gamePhase === 'memorize') {
+                    dCtx.beginPath(); dCtx.arc(smoothX, smoothY, 12, 0, 2*Math.PI);
+                    dCtx.fillStyle = isPinching ? '#FF3366' : '#FFEA00'; dCtx.fill(); dCtx.lineWidth = 4; dCtx.strokeStyle = '#000'; dCtx.stroke();
+                }
             } else { 
                 wasPinching = false; 
             }
