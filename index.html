@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your Name — Tools & Projects</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --black: #0e0e0e;
+      --white: #f9f9f7;
+      --gray-1: #e8e8e4;
+      --gray-2: #a0a09a;
+      --gray-3: #5a5a56;
+      --serif: 'Playfair Display', Georgia, serif;
+      --mono: 'DM Mono', 'Courier New', monospace;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--white);
+      color: var(--black);
+      font-family: var(--mono);
+      font-size: 14px;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Layout ── */
+    .page {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 80px 24px 120px;
+    }
+
+    /* ── Profile ── */
+    .profile {
+      display: flex;
+      align-items: flex-start;
+      gap: 28px;
+      margin-bottom: 48px;
+      padding-bottom: 48px;
+      border-bottom: 1px solid var(--gray-1);
+    }
+
+    .avatar-wrap {
+      flex-shrink: 0;
+    }
+
+    .avatar {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: var(--gray-1);
+      border: 1.5px solid var(--gray-1);
+      object-fit: cover;
+      display: block;
+      /* 替换 src 为你自己的头像链接 */
+    }
+
+    .avatar-placeholder {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: var(--black);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      flex-shrink: 0;
+    }
+
+    .profile-info { flex: 1; }
+
+    .profile-name {
+      font-family: var(--serif);
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 8px;
+      letter-spacing: -0.3px;
+    }
+
+    .profile-bio {
+      color: var(--gray-3);
+      font-size: 13px;
+      line-height: 1.65;
+      margin-bottom: 16px;
+      max-width: 420px;
+    }
+
+    .social-links {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .social-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--gray-3);
+      text-decoration: none;
+      padding: 5px 10px;
+      border: 1px solid var(--gray-1);
+      border-radius: 4px;
+      transition: all 0.15s ease;
+      letter-spacing: 0.02em;
+    }
+
+    .social-link:hover {
+      color: var(--black);
+      border-color: var(--black);
+      background: var(--black);
+      color: var(--white);
+    }
+
+    .social-link svg {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+    }
+
+    /* ── Section header ── */
+    .section-label {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--gray-2);
+      margin-bottom: 20px;
+    }
+
+    /* ── Project list ── */
+    .project-list {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .project-item {
+      display: grid;
+      grid-template-columns: 40px 1fr auto;
+      align-items: center;
+      gap: 16px;
+      padding: 18px 0;
+      border-bottom: 1px solid var(--gray-1);
+      text-decoration: none;
+      color: inherit;
+      transition: background 0.12s ease;
+      border-radius: 6px;
+      margin: 0 -12px;
+      padding-left: 12px;
+      padding-right: 12px;
+    }
+
+    .project-item:hover {
+      background: var(--gray-1);
+    }
+
+    .project-item:hover .project-arrow {
+      transform: translateX(3px);
+      opacity: 1;
+    }
+
+    .project-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      background: var(--black);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .project-meta { min-width: 0; }
+
+    .project-name {
+      font-family: var(--serif);
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1.3;
+      margin-bottom: 2px;
+    }
+
+    .project-desc {
+      font-size: 12px;
+      color: var(--gray-3);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .project-tag {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--gray-2);
+      letter-spacing: 0.04em;
+      background: var(--gray-1);
+      padding: 3px 8px;
+      border-radius: 3px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .project-arrow {
+      font-size: 16px;
+      color: var(--gray-2);
+      opacity: 0;
+      transition: all 0.15s ease;
+      flex-shrink: 0;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      margin-top: 64px;
+      padding-top: 32px;
+      border-top: 1px solid var(--gray-1);
+      font-size: 12px;
+      color: var(--gray-2);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    /* ── Page load fade in ── */
+    .page { animation: fadeUp 0.5s ease both; }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Mobile ── */
+    @media (max-width: 480px) {
+      .page { padding: 48px 20px 80px; }
+      .profile { flex-direction: column; gap: 16px; }
+      .profile-name { font-size: 24px; }
+      .project-item { grid-template-columns: 36px 1fr; }
+      .project-tag { display: none; }
+      .project-arrow { opacity: 0.4; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+
+    <!-- ── Profile ── -->
+    <div class="profile">
+
+      <!-- 把下面这行换成 <img class="avatar" src="你的头像URL" alt="avatar" /> -->
+      <div class="avatar-placeholder">🙂</div>
+
+      <div class="profile-info">
+        <!-- 改成你的名字 -->
+        <h1 class="profile-name">Your Name</h1>
+
+        <!-- 改成你的简介，1–2句就够 -->
+        <p class="profile-bio">
+          Building small tools for fun. Mostly frontend experiments,
+          AI-powered games, and things that shouldn't exist but do.
+        </p>
+
+        <div class="social-links">
+
+          <!-- TikTok — 把 href 换成你的主页链接 -->
+          <a class="social-link" href="https://www.tiktok.com/@yourhandle" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+              <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.18 8.18 0 0 0 4.78 1.52V6.75a4.85 4.85 0 0 1-1.01-.06z"/>
+            </svg>
+            TikTok
+          </a>
+
+          <!-- 小红书 — 把 href 换成你的主页链接 -->
+          <a class="social-link" href="https://www.xiaohongshu.com/user/profile/yourID" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.5 7.5h-2v1h2v1h-2v1h2v1h-3.5V8H16.5v1.5zm-5 4H10v-5h1.5v5zm-3-5H7v5h1.5v-5z"/>
+            </svg>
+            小红书
+          </a>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Projects ── -->
+    <p class="section-label">Projects</p>
+
+    <div class="project-list">
+
+      <!-- Air-Hanzi -->
+      <a class="project-item" href="./air-hanzi/">
+        <div class="project-icon">🀄</div>
+        <div class="project-meta">
+          <div class="project-name">Air-Hanzi</div>
+          <div class="project-desc">Write Chinese characters in the air with hand gestures</div>
+        </div>
+        <span class="project-tag">Game</span>
+        <span class="project-arrow">→</span>
+      </a>
+
+      <!-- 复制上面这个 <a> 块来添加新项目，改 emoji、名字、描述、tag 和 href 就好 -->
+      <!--
+      <a class="project-item" href="./your-tool/">
+        <div class="project-icon">🔧</div>
+        <div class="project-meta">
+          <div class="project-name">Tool Name</div>
+          <div class="project-desc">One-line description of what it does</div>
+        </div>
+        <span class="project-tag">Tool</span>
+        <span class="project-arrow">→</span>
+      </a>
+      -->
+
+    </div>
+
+    <!-- ── Footer ── -->
+    <footer class="footer">
+      <span>Built with curiosity.</span>
+      <span>© 2025</span>
+    </footer>
+
+  </main>
+</body>
+</html>
